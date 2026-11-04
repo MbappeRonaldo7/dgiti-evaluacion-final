@@ -128,9 +128,3 @@ variable "db_password" {
     error_message = "La contraseña de la BD debe tener entre 8 y 41 caracteres alfanuméricos."
   }
 }
-
-variable "enable_alb_logs" {
-  description = "Guardar los logs de acceso del ALB en S3"
-  type        = bool
-  default     = true
-}
