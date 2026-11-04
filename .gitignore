@@ -1,0 +1,23 @@
+# Terraform
+.terraform/
+.terraform.lock.hcl.bak
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+*.tfplan
+tfplan
+crash.log
+
+# Credenciales: nunca al repositorio
+.env
+*.pem
+credentials
+
+# Python
+__pycache__/
+.venv/
+.pytest_cache/
+report.xml
+
+# Resultados de pruebas de carga
+load-test/results/
