@@ -1,0 +1,136 @@
+# ---------------------------------------------------------------------------
+# Pipeline CI/CD - Evaluación final DGITI
+#
+#  1. test          -> lint (flake8) + pruebas unitarias e integración (pytest)
+#  2. terraform-ci  -> terraform fmt -check + terraform validate
+#  3. deploy        -> terraform plan + apply en AWS y prueba de humo a /health
+#                      (solo en push a main o ejecución manual)
+#
+# Secretos requeridos (Settings > Secrets and variables > Actions):
+#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN  (Learner Lab > AWS Details)
+#   DB_PASSWORD                                                  (alfanumérica, 8-41 caracteres)
+# ---------------------------------------------------------------------------
+name: CI-CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  TF_VERSION: "1.11.4"
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: "1. Validación y pruebas de la app"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint (flake8)
+        run: flake8 .
+
+      - name: Pruebas unitarias e integración (pytest)
+        run: pytest -v --junitxml=report.xml
+
+      - name: Publicar reporte de pruebas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-pytest
+          path: app/report.xml
+
+  terraform-ci:
+    name: "2. Validación de Terraform"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform fmt -check
+        run: terraform fmt -check -recursive
+
+      - name: terraform init (sin backend)
+        run: terraform init -backend=false
+
+      - name: terraform validate
+        run: terraform validate
+
+  deploy:
+    name: "3. Despliegue en AWS"
+    needs: [test, terraform-ci]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar credenciales de AWS (desde secretos)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Versión de la app (último commit que tocó app/)
+        run: echo "TF_VAR_app_version=$(git log -1 --format=%h -- app)" >> "$GITHUB_ENV"
+
+      - name: terraform init (estado remoto en S3)
+        run: bash scripts/init.sh
+
+      - name: terraform plan
+        working-directory: terraform
+        run: terraform plan -input=false -out=tfplan
+
+      - name: terraform apply
+        working-directory: terraform
+        run: terraform apply -input=false -auto-approve tfplan
+
+      - name: terraform output
+        working-directory: terraform
+        run: |
+          terraform output
+          echo "APP_URL=$(terraform output -raw app_url)" >> "$GITHUB_ENV"
+
+      - name: Prueba de humo - /health a través del ALB
+        run: |
+          for i in $(seq 1 40); do
+            code=$(curl -s -o /tmp/health.json -w "%{http_code}" "$APP_URL/health" || true)
+            if [ "$code" = "200" ]; then
+              echo "OK /health respondió 200:"; cat /tmp/health.json; exit 0
+            fi
+            echo "Intento $i: código $code, esperando 15 s..."; sleep 15
+          done
+          echo "El servicio no respondió a tiempo"; exit 1
