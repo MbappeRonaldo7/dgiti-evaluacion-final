@@ -1,0 +1,20 @@
+# Copiar este archivo como terraform.tfvars y ajustar los valores.
+# terraform.tfvars está en .gitignore: NO se sube al repositorio.
+# La contraseña de la BD es mejor pasarla por variable de entorno:
+#   export TF_VAR_db_password='UnaClaveSegura123'
+
+aws_region           = "us-east-1"
+project_name         = "dgiti"
+environment          = "prod"
+owner                = "thomas-angulo"
+
+instance_type        = "t3.micro"
+asg_min_size         = 2
+asg_desired_capacity = 2
+asg_max_size         = 4
+cpu_target           = 50
+
+db_instance_class    = "db.t3.micro"
+db_name              = "appdb"
+db_username          = "appadmin"
+# db_password        = "NO-ESCRIBIR-AQUI"  -> usar TF_VAR_db_password
