@@ -1,0 +1,93 @@
+{
+  "widgets": [
+    {
+      "type": "metric", "x": 0, "y": 0, "width": 12, "height": 6,
+      "properties": {
+        "title": "ALB - Solicitudes por minuto",
+        "region": "${region}", "stat": "Sum", "period": 60, "view": "timeSeries",
+        "metrics": [
+          ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", "${alb}"]
+        ]
+      }
+    },
+    {
+      "type": "metric", "x": 12, "y": 0, "width": 12, "height": 6,
+      "properties": {
+        "title": "ALB - Tiempo de respuesta (s)",
+        "region": "${region}", "period": 60, "view": "timeSeries",
+        "metrics": [
+          ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", "${alb}", {"stat": "Average", "label": "Promedio"}],
+          ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", "${alb}", {"stat": "p95", "label": "p95"}]
+        ]
+      }
+    },
+    {
+      "type": "metric", "x": 0, "y": 6, "width": 12, "height": 6,
+      "properties": {
+        "title": "ALB - Solicitudes por zona de disponibilidad (distribución)",
+        "region": "${region}", "stat": "Sum", "period": 60, "view": "timeSeries",
+        "metrics": [
+          ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", "${alb}", "AvailabilityZone", "${az1}", {"label": "${az1}"}],
+          ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", "${alb}", "AvailabilityZone", "${az2}", {"label": "${az2}"}],
+          ["AWS/ApplicationELB", "RequestCountPerTarget", "TargetGroup", "${tg}", {"label": "Por instancia (promedio)"}]
+        ]
+      }
+    },
+    {
+      "type": "metric", "x": 12, "y": 6, "width": 12, "height": 6,
+      "properties": {
+        "title": "Targets sanos / no sanos",
+        "region": "${region}", "stat": "Maximum", "period": 60, "view": "timeSeries",
+        "metrics": [
+          ["AWS/ApplicationELB", "HealthyHostCount", "TargetGroup", "${tg}", "LoadBalancer", "${alb}"],
+          ["AWS/ApplicationELB", "UnHealthyHostCount", "TargetGroup", "${tg}", "LoadBalancer", "${alb}"]
+        ]
+      }
+    },
+    {
+      "type": "metric", "x": 0, "y": 12, "width": 12, "height": 6,
+      "properties": {
+        "title": "CPU de cada instancia EC2 (%)",
+        "region": "${region}", "period": 60, "view": "timeSeries",
+        "metrics": [
+          [{"expression": "SEARCH('{AWS/EC2,InstanceId} MetricName=\"CPUUtilization\"', 'Average', 60)", "id": "e1"}]
+        ]
+      }
+    },
+    {
+      "type": "metric", "x": 12, "y": 12, "width": 12, "height": 6,
+      "properties": {
+        "title": "Respuestas HTTP (2XX vs 5XX)",
+        "region": "${region}", "stat": "Sum", "period": 60, "view": "timeSeries",
+        "metrics": [
+          ["AWS/ApplicationELB", "HTTPCode_Target_2XX_Count", "LoadBalancer", "${alb}"],
+          ["AWS/ApplicationELB", "HTTPCode_Target_5XX_Count", "LoadBalancer", "${alb}"],
+          ["AWS/ApplicationELB", "HTTPCode_ELB_5XX_Count", "LoadBalancer", "${alb}"]
+        ]
+      }
+    },
+    {
+      "type": "metric", "x": 0, "y": 18, "width": 12, "height": 6,
+      "properties": {
+        "title": "Auto Scaling - Instancias en servicio",
+        "region": "${region}", "stat": "Maximum", "period": 60, "view": "timeSeries",
+        "metrics": [
+          ["AWS/AutoScaling", "GroupInServiceInstances", "AutoScalingGroupName", "${asg}"],
+          ["AWS/AutoScaling", "GroupDesiredCapacity", "AutoScalingGroupName", "${asg}"]
+        ]
+      }
+    },
+    {
+      "type": "metric", "x": 12, "y": 18, "width": 12, "height": 6,
+      "properties": {
+        "title": "RDS - CPU, conexiones y retraso de la réplica",
+        "region": "${region}", "period": 60, "view": "timeSeries",
+        "metrics": [
+          ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "${db_primary}", {"stat": "Average", "label": "CPU primaria"}],
+          ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "${db_primary}", {"stat": "Average", "label": "Conexiones primaria", "yAxis": "right"}],
+          ["AWS/RDS", "ReplicaLag", "DBInstanceIdentifier", "${db_replica}", {"stat": "Average", "label": "ReplicaLag (s)", "yAxis": "right"}]
+        ]
+      }
+    }
+  ]
+}
