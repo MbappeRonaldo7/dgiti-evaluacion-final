@@ -110,6 +110,15 @@ jobs:
       - name: terraform init (estado remoto en S3)
         run: bash scripts/init.sh
 
+      # Limpieza única: el Learner Lab bloquea s3:GetBucketObjectLockConfiguration,
+      # por eso se retiró el bucket de logs del ALB. Se quita del estado si quedó ahí.
+      - name: Limpieza del estado (bucket de logs retirado)
+        working-directory: terraform
+        run: |
+          if terraform state list | grep -q 'aws_s3_bucket.alb_logs'; then
+            terraform state rm 'aws_s3_bucket.alb_logs[0]'
+          fi
+
       - name: terraform plan
         working-directory: terraform
         run: terraform plan -input=false -out=tfplan
