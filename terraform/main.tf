@@ -16,8 +16,6 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-data "aws_caller_identity" "current" {}
-
 # Amazon Linux 2023 más reciente
 data "aws_ami" "al2023" {
   most_recent = true
@@ -208,44 +206,7 @@ resource "aws_security_group" "db" {
 }
 
 # ===========================================================================
-# 3. ALMACENAMIENTO: bucket S3 para los logs de acceso del ALB
-# ===========================================================================
-data "aws_elb_service_account" "main" {}
-
-resource "aws_s3_bucket" "alb_logs" {
-  count         = var.enable_alb_logs ? 1 : 0
-  bucket        = "${local.name}-alb-logs-${data.aws_caller_identity.current.account_id}"
-  force_destroy = true
-  tags          = { Name = "${local.name}-alb-logs" }
-}
-
-resource "aws_s3_bucket_public_access_block" "alb_logs" {
-  count                   = var.enable_alb_logs ? 1 : 0
-  bucket                  = aws_s3_bucket.alb_logs[0].id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_policy" "alb_logs" {
-  count  = var.enable_alb_logs ? 1 : 0
-  bucket = aws_s3_bucket.alb_logs[0].id
-  policy = jsonencode({
-    Version = "2012-10-17"
-
-    Statement = [{
-      Sid       = "AllowELBLogDelivery"
-      Effect    = "Allow"
-      Principal = { AWS = data.aws_elb_service_account.main.arn }
-      Action    = "s3:PutObject"
-      Resource  = "${aws_s3_bucket.alb_logs[0].arn}/alb/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
-    }]
-  })
-}
-
-# ===========================================================================
-# 4. BALANCEADOR DE CARGA (Application Load Balancer)
+# 3. BALANCEADOR DE CARGA (Application Load Balancer)
 # ===========================================================================
 resource "aws_lb" "app" {
   name               = "${local.name}-alb"
@@ -254,17 +215,7 @@ resource "aws_lb" "app" {
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 
-  dynamic "access_logs" {
-    for_each = var.enable_alb_logs ? [1] : []
-    content {
-      bucket  = aws_s3_bucket.alb_logs[0].id
-      prefix  = "alb"
-      enabled = true
-    }
-  }
-
-  depends_on = [aws_s3_bucket_policy.alb_logs]
-  tags       = { Name = "${local.name}-alb" }
+  tags = { Name = "${local.name}-alb" }
 }
 
 resource "aws_lb_target_group" "app" {
@@ -298,7 +249,7 @@ resource "aws_lb_listener" "http" {
 }
 
 # ===========================================================================
-# 5. BASE DE DATOS: RDS MySQL primaria + Read Replica en otra AZ
+# 4. BASE DE DATOS: RDS MySQL primaria + Read Replica en otra AZ
 # ===========================================================================
 resource "aws_db_subnet_group" "main" {
   name       = "${local.name}-db-subnets"
@@ -343,7 +294,7 @@ resource "aws_db_instance" "replica" {
 }
 
 # ===========================================================================
-# 6. CÓMPUTO: Launch Template + Auto Scaling Group en 2 AZ
+# 5. CÓMPUTO: Launch Template + Auto Scaling Group en 2 AZ
 # ===========================================================================
 resource "aws_launch_template" "app" {
   name_prefix   = "${local.name}-lt-"
@@ -435,7 +386,7 @@ resource "aws_autoscaling_policy" "cpu" {
 }
 
 # ===========================================================================
-# 7. MONITOREO: alarmas y dashboard de CloudWatch
+# 6. MONITOREO: alarmas y dashboard de CloudWatch
 # ===========================================================================
 resource "aws_cloudwatch_metric_alarm" "unhealthy_hosts" {
   alarm_name          = "${local.name}-unhealthy-hosts"
